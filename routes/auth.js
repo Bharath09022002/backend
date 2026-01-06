@@ -91,12 +91,71 @@ router.get('/user', auth, async (req, res) => {
 });
 
 // @route   POST /api/auth/settings
-// @desc    Update user settings
+// @desc    Update user settings (email notifications + optional WhatsApp)
 router.post('/settings', auth, async (req, res) => {
     try {
-        const { whatsappEnabled, whatsappPhone, whatsappKey } = req.body;
-        const user = await User.findById(req.user.id);
+        const {
+            // Email notification settings from client
+            notificationEmail,
+            dailyBriefing,
+            eveningReview,
+            emailNotificationsEnabled,
+            // Legacy WhatsApp fields (still supported)
+            whatsappEnabled,
+            whatsappPhone,
+            whatsappKey
+        } = req.body;
 
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        // Ensure settings object exists
+        if (!user.settings) {
+            user.settings = {};
+        }
+
+        // Email notification settings
+        if (notificationEmail !== undefined) {
+            user.settings.notificationEmail = notificationEmail;
+        }
+
+        // Turn on/off automatic email notifications used by the cron job
+        if (emailNotificationsEnabled !== undefined) {
+            user.settings.emailNotificationsEnabled = emailNotificationsEnabled;
+        } else if (notificationEmail !== undefined) {
+            // If user set an email but no explicit toggle, enable notifications by default
+            user.settings.emailNotificationsEnabled = Boolean(notificationEmail);
+        }
+
+        // Daily briefing structure: { enabled, time }
+        if (dailyBriefing) {
+            if (!user.settings.dailyBriefing) {
+                user.settings.dailyBriefing = {};
+            }
+            if (typeof dailyBriefing.enabled === 'boolean') {
+                user.settings.dailyBriefing.enabled = dailyBriefing.enabled;
+            }
+            if (dailyBriefing.time) {
+                user.settings.dailyBriefing.time = dailyBriefing.time;
+            }
+        }
+
+        // Evening review structure: { enabled, time }
+        if (eveningReview) {
+            if (!user.settings.eveningReview) {
+                user.settings.eveningReview = {};
+            }
+            if (typeof eveningReview.enabled === 'boolean') {
+                user.settings.eveningReview.enabled = eveningReview.enabled;
+            }
+            if (eveningReview.time) {
+                user.settings.eveningReview.time = eveningReview.time;
+            }
+        }
+
+        // Optional WhatsApp integration (kept for compatibility)
         if (whatsappEnabled !== undefined) user.settings.whatsappEnabled = whatsappEnabled;
         if (whatsappPhone) user.settings.whatsappPhone = whatsappPhone;
         if (whatsappKey) user.settings.whatsappKey = whatsappKey;
